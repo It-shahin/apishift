@@ -44,7 +44,7 @@ Same-document JSON Pointer references are resolved using own-property access, UR
 | Types/nullability | Request allowed-type narrowing or response widening is breaking. Integer is a subset of number. Other direction is non-breaking. |
 | Enums | Request value removal or response value addition is breaking; inverse is non-breaking. |
 | Required properties | Newly required request fields and lost required response guarantees are breaking. |
-| Property presence | Removed request properties are potentially breaking; removed guaranteed response properties are breaking. Optional response removal is potentially breaking. |
+| Property presence | Removed request properties are potentially breaking; removed guaranteed response properties are breaking. Optional response removal is potentially breaking. A newly typed optional request property is potentially breaking because it constrains previously allowed additional values; a new unconstrained optional property is non-breaking. |
 | Bounds | Request tightening / response loosening of numeric, length and item bounds is breaking; inverse is non-breaking. |
 | Nested objects/arrays | Same directionality applies recursively to properties and items. |
 | Complex or unknown schema keywords | Unsupported coverage finding; no compatibility certainty for compositions, conditionals, patterns, formats, additionalProperties, readOnly/writeOnly or other unimplemented constraints. |
@@ -55,3 +55,5 @@ Reports sort by operation, location, rule and severity. IDs are derived from the
 ## Deliberate limitations
 
 No full JSON Schema satisfiability, remote files, recursive models, discriminator semantics, content negotiation, authentication compatibility, server routing, runtime behavior, callbacks/webhooks or complete OpenAPI validation. Complex schema nodes are reported unsupported and skipped. The roadmap is to extend tested semantics, not infer compatibility heuristically.
+
+OpenAPI 3.1 `nullable` is reported unsupported (use a `null` type union). `readOnly`/`writeOnly` requiredness changes are potentially breaking until direction-specific annotations are implemented. Constraints are checked independently, so findings are conservative rather than a proof of schema set inclusion. The required document subset includes `info.title`, `info.version`, and `paths`. Unused components are bounded and reference-resolved but not fully schema-validated. Example objects containing `$ref` are conservatively subject to the same reference restrictions.

@@ -1,4 +1,4 @@
-import { stable } from './compare'
+import { stable } from './stable'
 import type { Report } from './types'
 
 // Escape punctuation and HTML, including newlines, so specification text cannot create links or HTML.

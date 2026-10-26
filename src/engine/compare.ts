@@ -1,12 +1,7 @@
 import { parse } from './parse'
 import { LIMITS } from './types'
 import type { Finding, Obj, Report, Severity, Specification, Value } from './types'
-
-export function stable(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
-  if (value && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${JSON.stringify(k)}:${stable(v)}`).join(',')}}`
-  return JSON.stringify(value) ?? 'null'
-}
+import { stable, token } from './stable'
 const equal = (a: unknown, b: unknown) => stable(a) === stable(b)
 const names = <T>(a: Map<string, T>, b: Map<string, T>) => [...new Set([...a.keys(), ...b.keys()])].sort()
 const props = (s: Obj) => (s.properties ?? {}) as Record<string, Obj>
@@ -56,13 +51,14 @@ export function compare(baseline: Specification, proposed: Specification): Repor
     const ra = required(a), rb = required(b)
     for (const name of [...new Set([...ra, ...rb])].sort()) {
       if (ra.has(name) === rb.has(name)) continue
-      add(req ? rb.has(name) ? 'breaking' : 'non-breaking' : ra.has(name) ? 'breaking' : 'non-breaking', 'Property requiredness changed', op, `${at}/properties/${name}/required`, ra.has(name), rb.has(name), req ? 'Making a request property required rejects callers that omit it.' : 'Removing a required response guarantee means consumers can no longer rely on this property.')
+      const directional = [props(a)[name], props(b)[name]].some(p => p && (p.readOnly !== undefined || p.writeOnly !== undefined))
+      add(directional ? 'potential' : req ? rb.has(name) ? 'breaking' : 'non-breaking' : ra.has(name) ? 'breaking' : 'non-breaking', 'Property requiredness changed', op, `${at}/properties/${token(name)}/required`, ra.has(name), rb.has(name), directional ? 'Requiredness changed on a readOnly/writeOnly property; direction-specific semantics need manual review.' : req ? 'Making a request property required rejects callers that omit it.' : 'Removing a required response guarantee means consumers can no longer rely on this property.')
     }
     const pa = props(a), pb = props(b)
     for (const name of [...new Set([...Object.keys(pa), ...Object.keys(pb)])].sort()) {
-      const aa = pa[name], bb = pb[name], location = `${at}/properties/${name}`
+      const aa = pa[name], bb = pb[name], location = `${at}/properties/${token(name)}`
       if (!bb) add(req ? 'potential' : ra.has(name) ? 'breaking' : 'potential', 'Property removed', op, location, aa, undefined, req ? 'The documented request property was removed. Handling of existing callers is unknown.' : 'Consumers may read this response property; required properties were guaranteed.')
-      else if (!aa) add(req ? rb.has(name) ? 'breaking' : 'non-breaking' : 'potential', 'Property added', op, location, undefined, bb, req ? 'New required request properties reject existing callers; optional properties do not.' : 'A newly specified response property may affect strict decoders or previously unconstrained values.')
+      else if (!aa) add(req ? rb.has(name) && bb.readOnly === undefined && bb.writeOnly === undefined ? 'breaking' : Object.keys(bb).length === 0 ? 'non-breaking' : 'potential' : 'potential', 'Property added', op, location, undefined, bb, req ? 'New required request properties reject existing callers. An optional property schema may constrain previously allowed additional values; review existing payloads.' : 'A newly specified response property may affect strict decoders or previously unconstrained values.')
       else schema(aa, bb, direction, op, location, depth + 1)
     }
     if (a.items !== undefined || b.items !== undefined) schema((a.items ?? {}) as Obj, (b.items ?? {}) as Obj, direction, op, `${at}/items`, depth + 1)
@@ -70,9 +66,9 @@ export function compare(baseline: Specification, proposed: Specification): Repor
   function media(a: Map<string, Obj>, b: Map<string, Obj>, direction: 'request' | 'response', op: string, at: string) {
     for (const key of names(a, b)) {
       const aa = a.get(key), bb = b.get(key)
-      if (!bb) add('breaking', 'Media type removed', op, `${at}/${key}`, key, undefined, `The ${direction} media type is no longer supported.`)
-      else if (!aa) add(direction === 'request' ? 'non-breaking' : 'potential', 'Media type added', op, `${at}/${key}`, undefined, key, `A new ${direction} representation is documented.`)
-      else schema(aa, bb, direction, op, `${at}/${key}`)
+      if (!bb) add('breaking', 'Media type removed', op, `${at}/${token(key)}`, key, undefined, `The ${direction} media type is no longer supported.`)
+      else if (!aa) add(direction === 'request' ? 'non-breaking' : 'potential', 'Media type added', op, `${at}/${token(key)}`, undefined, key, `A new ${direction} representation is documented.`)
+      else schema(aa, bb, direction, op, `${at}/${token(key)}`)
     }
   }
   for (const key of names(baseline.operations, proposed.operations)) {
@@ -80,7 +76,7 @@ export function compare(baseline: Specification, proposed: Specification): Repor
     if (!b) { add('breaking', 'Operation removed', key, '/', key, undefined, 'Existing callers can no longer use this operation.', 'Keep the operation available or introduce a versioned migration.'); continue }
     if (!a) { add('non-breaking', 'Operation added', key, '/', undefined, key, 'A new operation is available without removing existing operations.', 'Document the new operation for consumers.'); continue }
     for (const id of names(a.parameters, b.parameters)) {
-      const aa = a.parameters.get(id), bb = b.parameters.get(id), at = `parameters/${id}`
+      const aa = a.parameters.get(id), bb = b.parameters.get(id), at = `parameters/${token(id)}`
       if (!bb) add('potential', 'Parameter removed', key, at, aa?.raw, undefined, 'Existing clients may still send this parameter. Its runtime handling is unknown.')
       else if (!aa) add(bb.required ? 'breaking' : 'non-breaking', 'Parameter added', key, at, undefined, bb.raw, bb.required ? 'Existing callers do not supply this newly required parameter.' : 'Callers may omit this new optional parameter.')
       else {

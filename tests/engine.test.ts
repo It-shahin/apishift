@@ -19,7 +19,17 @@ describe('consumer-facing schema semantics', () => {
   it.each(['maximum', 'maxLength', 'maxItems'])('tightened %s request bound', key => expect(changes({ [key]: 2 }, { [key]: 1 })[0].severity).toBe('breaking'))
   it('response widening bound breaks', () => expect(changes({ maximum: 2 }, { maximum: 3 }, 'response')[0].severity).toBe('breaking'))
   it('new required request property breaks', () => expect(changes({ type: 'object' }, { type: 'object', required: ['email'], properties: { email: { type: 'string' } } }).some(f => f.severity === 'breaking')).toBe(true))
-  it('new optional request property does not break', () => expect(changes({ type: 'object' }, { type: 'object', properties: { email: { type: 'string' } } }).every(f => f.severity === 'non-breaking')).toBe(true))
+  it('new typed optional request property is conservative about previously allowed additional values', () => expect(changes({ type: 'object' }, { type: 'object', properties: { email: { type: 'string' } } }).every(f => f.severity === 'potential')).toBe(true))
+  it('new unconstrained optional request property is safe', () => expect(changes({ type: 'object' }, { type: 'object', properties: { email: {} } }).every(f => f.severity === 'non-breaking')).toBe(true))
+  it('readOnly required request properties do not invent breaking certainty', () => expect(changes({ type: 'object' }, { type: 'object', required: ['id'], properties: { id: { type: 'string', readOnly: true } } }).some(f => f.severity === 'breaking')).toBe(false))
+  it('3.1 nullable is unsupported instead of interpreted as 3.0', () => expect(changes({ type: 'string' }, { type: 'string', nullable: true })[0].severity).toBe('unsupported'))
+  it('literal slash keys and nested properties have distinct IDs', () => {
+    const a = { properties: { 'x/properties/y': { type: 'string' }, x: { properties: { y: { type: 'string' } } } } }
+    const b = { properties: { 'x/properties/y': { type: 'integer' }, x: { properties: { y: { type: 'integer' } } } } }
+    const findings = changes(a, b)
+    expect(findings).toHaveLength(2)
+    expect(new Set(findings.map(f => f.id)).size).toBe(2)
+  })
   it('lost guaranteed response property breaks', () => expect(changes({ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }, { type: 'object' }, 'response').some(f => f.rule === 'Property removed' && f.severity === 'breaking')).toBe(true))
   it('lost optional response property is uncertain', () => expect(changes({ properties: { id: { type: 'string' } } }, {}, 'response')[0].severity).toBe('potential'))
   it('nested array item property type is checked', () => expect(changes({ type: 'array', items: { properties: { id: { type: 'string' } } } }, { type: 'array', items: { properties: { id: { type: 'integer' } } } })[0].location).toContain('/items/properties/id'))
@@ -53,7 +63,7 @@ describe('parser security and validation', () => {
   it('rejects large input', () => expect(() => parse(' '.repeat(1_048_577))).toThrow('1 MiB'))
   it('rejects prototype keys', () => expect(() => parse(spec().replace('"type":"string"', '"__proto__":{}'))).toThrow('Unsafe'))
   it('rejects deep nesting', () => expect(() => parse(JSON.stringify({ a: Array.from({ length: 70 }).reduce<unknown>(v => ({ a: v }), {}) }))).toThrow('nesting'))
-  it.each([{ type: 'weird' }, { required: 'id' }, { nullable: 'yes' }, { enum: [] }, { minLength: -1 }, { minimum: 10, maximum: 1 }, { properties: [] }])('rejects invalid schema %j', schema => expect(() => parse(spec(schema as Obj))).toThrow())
+  it.each<Obj>([{ type: 'weird' }, { required: 'id' }, { nullable: 'yes' }, { enum: [] }, { minLength: -1 }, { minimum: 10, maximum: 1 }, { properties: [] }])('rejects invalid schema %j', schema => expect(() => parse(spec(schema))).toThrow())
   it('rejects missing responses', () => expect(() => parse(spec({}, 'request', { responses: null }))).toThrow())
   it('rejects duplicate parameters', () => expect(() => parse(spec({}, 'request', { parameters: [{ name: 'q', in: 'query', schema: {} }, { name: 'q', in: 'query', schema: {} }] }))).toThrow('duplicate'))
   it('resolves escaped local references', () => {

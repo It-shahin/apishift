@@ -1,6 +1,7 @@
 import { isAlias, parseDocument, visit } from 'yaml'
 import { LIMITS } from './types'
 import type { Body, Coverage, Obj, Operation, Parameter, Specification, Value } from './types'
+import { token } from './stable'
 
 export function object(value: unknown, at: string): Obj {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${at}: expected an object.`)
@@ -89,7 +90,7 @@ export function parse(text: string): Specification {
       if (s[key] !== undefined && (typeof s[key] !== 'number' || (key.includes('Length') || key.includes('Items')) && (!Number.isInteger(s[key]) || (s[key] as number) < 0))) throw new Error(`${at}.${key}: invalid constraint.`)
     }
     for (const [lo, hi] of [['minimum', 'maximum'], ['minLength', 'maxLength'], ['minItems', 'maxItems']]) if (typeof s[lo] === 'number' && typeof s[hi] === 'number' && s[lo] > s[hi]) throw new Error(`${at}: contradictory bounds.`)
-    if (s.properties !== undefined) for (const [key, child] of Object.entries(object(s.properties, `${at}.properties`))) (s.properties as Obj)[key] = schema(child, op, `${at}/properties/${key}`)
+    if (s.properties !== undefined) for (const [key, child] of Object.entries(object(s.properties, `${at}.properties`))) (s.properties as Obj)[key] = schema(child, op, `${at}/properties/${token(key)}`)
     if (s.items !== undefined) s.items = schema(s.items, op, `${at}/items`)
     for (const key of ['allOf', 'oneOf', 'anyOf']) if (s[key] !== undefined) {
       if (!Array.isArray(s[key]) || !s[key].length) throw new Error(`${at}.${key}: expected a non-empty schema array.`)
@@ -109,8 +110,9 @@ export function parse(text: string): Specification {
     for (const [media, raw] of Object.entries(object(value, at))) {
       if (!media.includes('/')) throw new Error(`${at}: invalid media type.`)
       const m = object(raw, at)
-      extras(m, ['schema'], op, `${at}/${media}`)
-      result.set(media.toLowerCase(), schema(m.schema, op, `${at}/${media}`))
+      extras(m, ['schema'], op, `${at}/${token(media)}`)
+      if (result.has(media.toLowerCase())) throw new Error(`${at}: duplicate normalized media type.`)
+      result.set(media.toLowerCase(), schema(m.schema, op, `${at}/${token(media.toLowerCase())}`))
     }
     return result
   }
@@ -127,9 +129,9 @@ export function parse(text: string): Specification {
       const name = p.in === 'header' ? p.name.toLowerCase() : p.name
       const key = `${p.in}:${name}`
       if (result.has(key)) throw new Error(`${at}: duplicate parameter identity.`)
-      extras(p, ['name', 'in', 'required', 'schema'], op, `parameters/${key}`)
+      extras(p, ['name', 'in', 'required', 'schema'], op, `parameters/${token(key)}`)
       if (p.content !== undefined) { if (Object.keys(object(p.content, at)).length !== 1) throw new Error(`${at}: parameter content must contain one media type.`); content(p.content, op, `parameters/${key}/content`) }
-      result.set(key, { name, in: p.in, required, schema: schema(p.schema, op, `parameters/${key}`), raw: p })
+      result.set(key, { name, in: p.in, required, schema: schema(p.schema, op, `parameters/${token(key)}/schema`), raw: p })
     }
     return result
   }
