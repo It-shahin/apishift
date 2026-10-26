@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://apishift.pages.dev/sitemap.xml
+Sitemap: https://apishift.testamerican7.workers.dev/sitemap.xml

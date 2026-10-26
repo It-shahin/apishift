@@ -2,6 +2,8 @@
 
 **Catch breaking API changes before they reach production.**
 
+**Live demo: [apishift.testamerican7.workers.dev](https://apishift.testamerican7.workers.dev/)** — no account, no upload; everything runs in your browser.
+
 APIShift compares two OpenAPI 3.0.x / 3.1.x specifications and reports which changes can break existing API consumers — computed entirely in your browser, with explicit boundaries around what the analysis does *not* know.
 
 <table>
@@ -77,7 +79,7 @@ Findings are sorted deterministically and carry collision-free IDs derived from 
 ## Getting started
 
 ```bash
-pnpm install          # pnpm 12 recommended (npm/yarn work too)
+pnpm install          # pnpm 10.32.0 is pinned via packageManager (npm/yarn work too)
 pnpm dev              # dev server with HMR
 pnpm test             # Vitest: comparison rules + parser regressions (99 tests)
 pnpm test:e2e         # Playwright: real browser workflows (14 tests, 2 viewports)
@@ -94,16 +96,32 @@ First Playwright run needs a browser once: `pnpm exec playwright install chromiu
 
 GitHub Actions runs on every push/PR: lint → typecheck → Vitest → production build → Playwright against the built bundle (`.github/workflows/ci.yml`).
 
-## Deployment (Cloudflare Pages, free tier)
+## Deployment (Cloudflare Workers, static assets)
 
-Static zero-backend deployment:
+Static zero-backend deployment to Cloudflare Workers:
 
 1. Push this repo to GitHub
-2. Cloudflare Pages → "Connect to Git"
-3. Build settings: **Framework preset: Vite**, build `pnpm build`, output `dist`
-4. Done — `public/_headers` ships a restrictive CSP (`connect-src 'none'`) that enforces the "no data leaves your browser" claim at the origin level
+2. Cloudflare → Workers & Pages → "Create"/"Import a repository" → **Workers** (static assets), build `pnpm build`, output `dist`
+3. The live deployment is served from [apishift.testamerican7.workers.dev](https://apishift.testamerican7.workers.dev/)
 
-Vercel or GitHub Pages work equally well with the same `dist` output; only the dashboard/headers file is Cloudflare-specific.
+The equivalent local/wrangler flow is an assets-only worker (no script bundle):
+
+```jsonc
+// wrangler.jsonc (optional — not required for the dashboard flow above)
+{
+  "name": "apishift",
+  "compatibility_date": "2026-01-01",
+  "assets": { "directory": "./dist" }
+}
+```
+
+`public/_headers` ships with the build and is honored by Workers static assets. It carries a restrictive CSP (`connect-src 'none'`) that enforces the "no data leaves your browser" claim at the origin level. Verify the hosted response headers with:
+
+```bash
+curl -sI https://apishift.testamerican7.workers.dev/ | grep -i 'content-security-policy\|referrer-policy\|x-content-type'
+```
+
+The same headers are enforced locally by `pnpm preview`, which reads `public/_headers` for parity. Vercel or GitHub Pages also work with the same `dist` output; only the headers file is Cloudflare-specific.
 
 ## Roadmap
 
