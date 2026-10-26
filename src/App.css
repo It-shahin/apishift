@@ -148,7 +148,7 @@ h2 { font-size: 28px; font-weight: 550; letter-spacing: -1px; line-height: 1.25;
 .group-title { display: flex; align-items: center; gap: 8px; padding: 12px 17px; background: var(--surface-alt); border-block: 1px solid var(--line); color: var(--muted); }
 .group-title h3 { color: var(--text); font: 10px Consolas, monospace; overflow-wrap: anywhere; }
 .group-title > span { font-size: 9px; margin-left: auto; border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
-.finding { content-visibility: auto; contain-intrinsic-size: auto 70px; border-bottom: 1px solid var(--line); }
+.finding { border-bottom: 1px solid var(--line); }
 .finding:last-child { border-bottom: 0; }
 .finding summary { display: flex; align-items: center; gap: 12px; padding: 17px; list-style: none; }
 .finding summary::-webkit-details-marker, .coverage-details summary::-webkit-details-marker { display: none; }

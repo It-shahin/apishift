@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://apishift.pages.dev/sitemap.xml
